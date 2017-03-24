@@ -54,8 +54,17 @@ namespace AntennaPowerSaver
 			disableFloatRange.maxValue = enableThreshold;
 		}
 
+		private bool wasAutoPowerSaveActive = false;
 		private void SetPropperAntennaState()
 		{
+			if (wasAutoPowerSaveActive) {
+				// See if we've dropped out of timewarp
+				if (TimeWarp.CurrentRate == 1) {
+					Log("Dropping out of timewarp, enabling auto power save");
+					autoPowerSaveActive = wasAutoPowerSaveActive;
+					wasAutoPowerSaveActive = false; 
+				}
+			}
 			if (autoPowerSaveActive) {
 				double amount = 1;
 				double maxAmount = 1;
@@ -70,6 +79,13 @@ namespace AntennaPowerSaver
 						Log("Disabling Antenna");
 						rtAntennaType.GetMethod("SetState").Invoke(rtAntenna, new object[] { false });
 						Log("Disabled");
+
+						// If we enter timewarp, we should disable antennas, but not enable them until we exit timewarp.
+						if (TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRate > 1) {
+							Log("Entering timewarp, disabling auto power save");
+							wasAutoPowerSaveActive = true;
+							autoPowerSaveActive = false;
+						}
 					}
 					if (!isEnabled && percentage >= (enableThreshold / 100)) {
 						Log("Enabling Antenna");
@@ -77,6 +93,7 @@ namespace AntennaPowerSaver
 						Log("Enabled");
 					}
 				}
+
 			}
 		}
 
