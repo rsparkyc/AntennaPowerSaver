@@ -57,12 +57,15 @@ namespace AntennaPowerSaver
 		private bool wasAutoPowerSaveActive = false;
 		private void SetPropperAntennaState()
 		{
+			if (rtAntennaType == null) {
+				return;
+			}
 			if (wasAutoPowerSaveActive) {
 				// See if we've dropped out of timewarp
 				if (TimeWarp.CurrentRate == 1) {
 					Log("Dropping out of timewarp, enabling auto power save");
 					autoPowerSaveActive = wasAutoPowerSaveActive;
-					wasAutoPowerSaveActive = false; 
+					wasAutoPowerSaveActive = false;
 				}
 			}
 			if (autoPowerSaveActive) {
@@ -73,27 +76,38 @@ namespace AntennaPowerSaver
 				}
 				double percentage = amount / maxAmount;
 
-				if (rtAntennaType != null) {
-					bool isEnabled = (bool)rtAntennaType.GetProperty("Activated").GetGetMethod().Invoke(rtAntenna, null);
-					if (isEnabled && percentage <= (disableThreshold / 100)) {
-						Log("Disabling Antenna");
-						rtAntennaType.GetMethod("SetState").Invoke(rtAntenna, new object[] { false });
-						Log("Disabled");
+				bool isEnabled = (bool)rtAntennaType.GetProperty("Activated").GetGetMethod().Invoke(rtAntenna, null);
+				if (isEnabled && percentage <= (disableThreshold / 100)) {
+					Log("Attempting to disable antenna");
+					setAntennaState(false);
 
-						// If we enter timewarp, we should disable antennas, but not enable them until we exit timewarp.
-						if (TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRate > 1) {
-							Log("Entering timewarp, disabling auto power save");
-							wasAutoPowerSaveActive = true;
-							autoPowerSaveActive = false;
-						}
-					}
-					if (!isEnabled && percentage >= (enableThreshold / 100)) {
-						Log("Enabling Antenna");
-						rtAntennaType.GetMethod("SetState").Invoke(rtAntenna, new object[] { true });
-						Log("Enabled");
+					// If we enter timewarp, we should disable antennas, but not enable them until we exit timewarp.
+					if (TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRate > 1) {
+						Log("Entering timewarp, disabling auto power save");
+						wasAutoPowerSaveActive = autoPowerSaveActive;
+						autoPowerSaveActive = false;
 					}
 				}
+				if (!isEnabled && percentage >= (enableThreshold / 100)) {
+					Log("Attempting to enable antenna");
+					setAntennaState(true);
+				}
 
+			}
+		}
+
+		DateTime lastAntennaChangedDate = new DateTime();
+		// If we spam this function, we'll get some weirdness with the antenna animations, so we'll only allow it to execute every 5 seconds or so
+		private void setAntennaState(bool active)
+		{
+			DateTime now = DateTime.Now;
+			if (now.Subtract(lastAntennaChangedDate).TotalSeconds > 5) {
+				rtAntennaType.GetMethod("SetState").Invoke(rtAntenna, new object[] { active });
+				lastAntennaChangedDate = now;
+				Log("Antenna " + (active ? "Enabled" : "Disabled"));
+			}
+			else {
+				Log("Could not " + (active ? "enable" : "disable") + " antenna, within lockout time threshold");
 			}
 		}
 
